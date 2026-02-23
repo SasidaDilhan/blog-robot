@@ -1,0 +1,28 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Draft {
+  id             String   @id
+  title          String
+  contentHtml    String   @default("")
+  excerpt        String   @default("")
+  tagsJson       String   @default("[]")
+  seoTitle       String   @default("")
+  seoDescription String   @default("")
+  visibility     String   @default("hidden") // hidden | visible
+  blog           String   @default("News")
+  author         String   @default("Sasinda Dilhan")
+  status         String   @default("generating") // generating | draft | publishing | published | failed
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
