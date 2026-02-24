@@ -1,6 +1,6 @@
 "use client";
 
-import { createSupabaseBrowserClient } from "@/lib/superbase/browser";
+import { createSupabaseBrowserClient } from "../../lib/superbase/client";
 
 export default function LoginPage() {
   async function signInWithGoogle() {
