@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   const prompt = req.nextUrl.searchParams.get("prompt");
+  const nonce = req.nextUrl.searchParams.get("nonce");
   if (!prompt) {
     return NextResponse.json({ error: "Missing prompt" }, { status: 400 });
   }
 
   try {
+    const photoPrompt = `Photorealistic professional product photography, natural lighting, realistic textures. ${prompt}`;
     const response = await fetch(
       "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
       {
@@ -16,11 +18,18 @@ export async function GET(req: NextRequest) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          inputs: prompt,
+          inputs: photoPrompt,
           parameters: {
             width: 1024,
             height: 576,
-            num_inference_steps: 20,
+            num_inference_steps: 28,
+            guidance_scale: 7.5,
+            seed: nonce ? Number.parseInt(nonce, 10) || undefined : undefined,
+            negative_prompt:
+              "cartoon, illustration, anime, 3d render, cgi, plastic skin, distorted, blurry, low quality, watermark, text",
+          },
+          options: {
+            use_cache: false,
           },
         }),
         signal: AbortSignal.timeout(120000),
@@ -42,7 +51,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "no-store, max-age=0",
       },
     });
   } catch (err) {

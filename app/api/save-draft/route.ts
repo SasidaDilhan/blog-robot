@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServerClient } from "../../../lib/superbase/server";
-import { updateDraft } from "../../../lib/superbase/helpers";
+import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { updateDraft } from "../../../lib/supabase/helpers";
 
 export async function PATCH(req: NextRequest) {
   const supabase = await createSupabaseServerClient();

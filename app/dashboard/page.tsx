@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createSupabaseServerClient } from "../../lib/superbase/server";
-import { Draft } from "../../lib/superbase/types";
+import { createSupabaseServerClient } from "../../lib/supabase/server";
+import { Draft } from "../../lib/supabase/types";
 
 const STATUS_BADGE: Record<string, string> = {
   generating: "bg-yellow-100 text-yellow-800",

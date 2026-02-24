@@ -2,8 +2,8 @@
 
 import { redirect, notFound } from "next/navigation";
 import DraftEditor from "./DraftEditor";
-import { createSupabaseServerClient } from "../../../lib/superbase/server";
-import { Draft } from "../../../lib/superbase/types";
+import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { Draft } from "../../../lib/supabase/types";
 
 export default async function DraftPage({
   params,

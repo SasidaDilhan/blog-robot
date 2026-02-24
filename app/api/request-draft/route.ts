@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServerClient } from "../../../lib/superbase/server";
-import { insertDraft } from "../../../lib/superbase/helpers";
-import { Draft } from "../../../lib/superbase/types";
+import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { insertDraft } from "../../../lib/supabase/helpers";
+import { Draft } from "../../../lib/supabase/types";
 
 export async function POST(req: NextRequest) {
   const supabase = await createSupabaseServerClient();

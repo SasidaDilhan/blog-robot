@@ -1,6 +1,6 @@
 // app/auth/callback/route.ts
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "../../../lib/superbase/server";
+import { createSupabaseServerClient } from "../../../lib/supabase/server";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);

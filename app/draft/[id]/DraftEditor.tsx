@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { Draft } from "../../../lib/superbase/types";
+import { useRouter } from "next/navigation";
+import { Draft } from "../../../lib/supabase/types";
 
 // Load Tiptap only client-side
 const RichEditorClient = dynamic(() => import("./RichEditorClient"), {
@@ -31,15 +32,18 @@ function useImages(prompts: string[]) {
       [prompt]: { src: null, loading: true, error: false },
     }));
     try {
+      const nonce = `${Date.now()}${Math.floor(Math.random() * 10000)}`;
       const res = await fetch(
-        `/api/image-proxy?prompt=${encodeURIComponent(prompt)}`,
+        `/api/image-proxy?prompt=${encodeURIComponent(prompt)}&nonce=${nonce}`,
+        { cache: "no-store" },
       );
       if (!res.ok) throw new Error();
       const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
       setImages((p) => ({
         ...p,
         [prompt]: {
-          src: URL.createObjectURL(blob),
+          src: blobUrl,
           loading: false,
           error: false,
         },
@@ -49,6 +53,7 @@ function useImages(prompts: string[]) {
         ...p,
         [prompt]: { src: null, loading: false, error: true },
       }));
+    } finally {
       generating.current.delete(prompt);
     }
   }, []);
@@ -133,14 +138,22 @@ function BlogPreview({
   draft,
   images,
   generate,
+  saveFeaturedImage,
+  savingImage,
   segments,
 }: {
   draft: Draft;
   images: Record<string, ImgState>;
   generate: (p: string) => void;
+  saveFeaturedImage: () => void;
+  savingImage: boolean;
   segments: { type: "html" | "image"; content: string }[];
 }) {
   const featuredImg = draft.image_prompt ? images[draft.image_prompt] : null;
+  const featuredSrc = featuredImg?.src ?? draft.image_url ?? null;
+  const showFeaturedLoading = !draft.image_url && Boolean(featuredImg?.loading);
+  const showFeaturedError =
+    !draft.image_url && Boolean(featuredImg?.error) && !featuredImg?.src;
 
   return (
     <div className="bg-white font-serif">
@@ -179,7 +192,7 @@ function BlogPreview({
           className="relative w-full rounded-2xl overflow-hidden bg-gray-100 mb-8"
           style={{ aspectRatio: "16/8" }}
         >
-          {featuredImg?.loading && (
+          {showFeaturedLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <div className="w-10 h-10 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin" />
               <p className="text-sm text-gray-400 font-sans">
@@ -188,15 +201,15 @@ function BlogPreview({
               <p className="text-xs text-gray-300 font-sans">20–30 seconds</p>
             </div>
           )}
-          {featuredImg?.src && (
+          {featuredSrc && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={featuredImg.src}
+              src={featuredSrc}
               alt={draft.title}
               className="w-full h-full object-cover"
             />
           )}
-          {featuredImg?.error && (
+          {showFeaturedError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-red-50">
               <p className="text-sm text-red-400 font-sans">⚠ Image failed</p>
               <button
@@ -218,7 +231,26 @@ function BlogPreview({
           )}
 
           {/* Title + meta overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
+          {draft.image_prompt && (
+            <div className="absolute top-3 right-3 z-10 flex gap-2 font-sans">
+              <button
+                type="button"
+                onClick={() => generate(draft.image_prompt!)}
+                className="text-xs bg-white/90 hover:bg-white text-gray-900 px-3 py-1.5 rounded-full"
+              >
+                Regenerate
+              </button>
+              <button
+                type="button"
+                onClick={saveFeaturedImage}
+                disabled={savingImage}
+                className="text-xs bg-gray-900/90 hover:bg-gray-900 text-white px-3 py-1.5 rounded-full disabled:opacity-50"
+              >
+                {savingImage ? "Saving..." : "Save Image"}
+              </button>
+            </div>
+          )}
           <div className="absolute bottom-0 left-0 right-0 p-8">
             <h1
               className="text-white font-bold leading-tight"
@@ -480,8 +512,11 @@ function SettingsSidebar({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
+  const router = useRouter();
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [saving, setSaving] = useState(false);
+  const [savingImage, setSavingImage] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [tagsInput, setTagsInput] = useState(
@@ -523,6 +558,9 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
     ...inlinePrompts,
   ];
   const { images, generate } = useImages(allPrompts);
+  const hasUnsavedFeaturedPreview = Boolean(
+    draft.image_prompt && images[draft.image_prompt]?.src?.startsWith("blob:"),
+  );
 
   async function save() {
     setSaving(true);
@@ -549,6 +587,54 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
     setTimeout(() => setSaveMsg(null), 3000);
   }
 
+  async function saveFeaturedImage() {
+    if (!draft.image_prompt) {
+      alert("No image prompt to generate.");
+      return;
+    }
+
+    setSavingImage(true);
+    try {
+      const currentPreviewSrc = draft.image_prompt
+        ? images[draft.image_prompt]?.src
+        : null;
+
+      if (!currentPreviewSrc?.startsWith("blob:")) {
+        if (draft.image_url) {
+          throw new Error(
+            "This image is already saved. Click Regenerate to create a new image, then click Save Image.",
+          );
+        }
+        throw new Error("Click Regenerate first, then click Save Image.");
+      }
+
+      const imgBlob = await fetch(currentPreviewSrc).then((r) => r.blob());
+      const form = new FormData();
+      form.append("draft_id", draft.id);
+      form.append("prompt", draft.image_prompt);
+      form.append("image", imgBlob, "featured-image.png");
+      const res = await fetch("/api/save-generated-image", {
+        method: "POST",
+        body: form,
+      });
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error ?? "Image save failed");
+      }
+
+      if (body.image_url) {
+        setDraft((prev) => ({ ...prev, image_url: body.image_url }));
+      }
+      setSaveMsg("Image saved ✓");
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Image save failed");
+    } finally {
+      setSavingImage(false);
+    }
+  }
+
   async function publish() {
     setPublishing(true);
     const res = await fetch("/api/publish", {
@@ -563,6 +649,34 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
       alert(b.error ?? "Publish failed");
     }
     setPublishing(false);
+  }
+
+  async function deleteDraft() {
+    if (deleting) return;
+    const confirmed = window.confirm(
+      "Delete this draft permanently? This cannot be undone.",
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/delete-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draft_id: draft.id }),
+      });
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error ?? "Delete failed");
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+      setDeleting(false);
+    }
   }
 
   // ── Generating spinner ──
@@ -624,6 +738,13 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
               ⚙ Settings
             </button>
             <button
+              onClick={saveFeaturedImage}
+              disabled={savingImage || !hasUnsavedFeaturedPreview}
+              className="text-sm px-4 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition"
+            >
+              {savingImage ? "Saving image..." : "Save AI Image"}
+            </button>
+            <button
               onClick={save}
               disabled={saving || draft.status === "published"}
               className="text-sm px-4 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition"
@@ -631,8 +752,16 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
               {saving ? "Saving…" : "Save"}
             </button>
             <button
+              onClick={deleteDraft}
+              disabled={deleting || publishing}
+              className="text-sm px-4 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-40 transition"
+            >
+              {deleting ? "Deleting..." : "Delete Draft"}
+            </button>
+            <button
               onClick={publish}
               disabled={
+                deleting ||
                 publishing ||
                 draft.status === "published" ||
                 draft.status === "publishing"
@@ -641,7 +770,17 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
             >
               {draft.status === "publishing"
                 ? "Publishing…"
-                : draft.status === "published"
+                : draft.status === "published" &&
+                    draft.shopify_url && (
+                      <a
+                        href={draft.shopify_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-indigo-600 underline"
+                      >
+                        View on Shopify ↗
+                      </a>
+                    )
                   ? "✓ Published"
                   : "Publish →"}
             </button>
@@ -703,6 +842,8 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
             draft={draft}
             images={images}
             generate={generate}
+            saveFeaturedImage={saveFeaturedImage}
+            savingImage={savingImage}
             segments={segments}
           />
         </div>

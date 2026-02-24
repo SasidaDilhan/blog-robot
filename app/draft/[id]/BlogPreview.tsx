@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Draft } from "../../../lib/superbase/types";
+import { Draft } from "../../../lib/supabase/types";
 
 interface BlogPreviewProps {
   draft: Draft;
@@ -206,7 +206,7 @@ export default function BlogPreview({ draft, onUpdate }: BlogPreviewProps) {
               <p className="text-sm text-gray-400 font-sans">
                 Generating featured image…
               </p>
-              <p className="text-xs text-gray-300 font-sans">20–30 seconds</p>
+              <p className="text-xs text-gray-300 font-sans">20-30 seconds</p>
             </div>
           )}
           {featuredImage?.src && (
@@ -241,7 +241,7 @@ export default function BlogPreview({ draft, onUpdate }: BlogPreviewProps) {
           )}
 
           {/* Title overlay */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-8 py-6">
+          <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 via-black/40 to-transparent px-8 py-6">
             {editingTitle ? (
               <input
                 autoFocus

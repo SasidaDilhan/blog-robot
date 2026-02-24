@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseAdminClient } from "../../../lib/superbase/server";
-import { updateDraft } from "../../../lib/superbase/helpers";
+import { createSupabaseAdminClient } from "../../../lib/supabase/server";
+import { updateDraft } from "../../../lib/supabase/helpers";
 
 interface CallbackBody {
   secret: string;
@@ -13,6 +13,7 @@ interface CallbackBody {
   seo_description?: string;
   image_prompt?: string;
   image_url?: string;
+  shopify_url?: string;
 }
 
 export async function POST(req: NextRequest) {
