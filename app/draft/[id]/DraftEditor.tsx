@@ -42,11 +42,7 @@ function useImages(prompts: string[]) {
       const blobUrl = URL.createObjectURL(blob);
       setImages((p) => ({
         ...p,
-        [prompt]: {
-          src: blobUrl,
-          loading: false,
-          error: false,
-        },
+        [prompt]: { src: blobUrl, loading: false, error: false },
       }));
     } catch {
       setImages((p) => ({
@@ -230,8 +226,7 @@ function BlogPreview({
             </div>
           )}
 
-          {/* Title + meta overlay */}
-          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
+          {/* Regenerate / Save buttons */}
           {draft.image_prompt && (
             <div className="absolute top-3 right-3 z-10 flex gap-2 font-sans">
               <button
@@ -251,6 +246,9 @@ function BlogPreview({
               </button>
             </div>
           )}
+
+          {/* Title + meta overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-8">
             <h1
               className="text-white font-bold leading-tight"
@@ -504,6 +502,21 @@ function SettingsSidebar({
             </p>
           </div>
         )}
+
+        {/* View on Shopify link in sidebar when published */}
+        {draft.status === "published" && draft.shopify_url && (
+          <div className="pt-2 border-t border-gray-100">
+            <a
+              href={draft.shopify_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+            >
+              <span>🛍</span>
+              View on Shopify ↗
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -525,20 +538,39 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Poll while generating
+  // ── Poll while generating or publishing ──
+  // ── Poll while generating or publishing ──
   useEffect(() => {
-    if (draft.status !== "generating") return;
+    if (draft.status !== "generating" && draft.status !== "publishing") return;
+
     pollRef.current = setInterval(async () => {
       const res = await fetch(`/api/draft-status?id=${draft.id}`);
       if (res.ok) {
         const updated: Draft = await res.json();
-        if (updated.status !== "generating") {
-          setDraft(updated);
+
+        if (updated.status !== draft.status) {
+          setDraft((prev) => ({
+            ...prev,
+            status: updated.status,
+            ...(updated.shopify_url
+              ? { shopify_url: updated.shopify_url }
+              : {}),
+            ...(updated.image_url ? { image_url: updated.image_url } : {}),
+          }));
           setTagsInput((updated.tags ?? []).join(", "));
           if (pollRef.current) clearInterval(pollRef.current);
+
+          // ── Redirect to Shopify admin when published ──
+          if (updated.status === "published") {
+            window.open(
+              "https://admin.shopify.com/store/buddy-store-8866/content/articles?selectedView=all",
+              "_blank",
+            );
+          }
         }
       }
     }, 3000);
+
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
@@ -602,10 +634,10 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
       if (!currentPreviewSrc?.startsWith("blob:")) {
         if (draft.image_url) {
           throw new Error(
-            "This image is already saved. Click Regenerate to create a new image, then click Save Image.",
+            "This image is already saved. Click Regenerate to create a new image, then Save Image.",
           );
         }
-        throw new Error("Click Regenerate first, then click Save Image.");
+        throw new Error("Click Regenerate first, then Save Image.");
       }
 
       const imgBlob = await fetch(currentPreviewSrc).then((r) => r.blob());
@@ -619,9 +651,7 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
       });
 
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body.error ?? "Image save failed");
-      }
+      if (!res.ok) throw new Error(body.error ?? "Image save failed");
 
       if (body.image_url) {
         setDraft((prev) => ({ ...prev, image_url: body.image_url }));
@@ -667,9 +697,7 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
       });
 
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(body.error ?? "Delete failed");
-      }
+      if (!res.ok) throw new Error(body.error ?? "Delete failed");
 
       router.push("/dashboard");
       router.refresh();
@@ -727,16 +755,19 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
               {draft.status}
             </span>
           </div>
+
           <div className="flex items-center gap-2">
             {saveMsg && (
               <span className="text-xs text-green-600">{saveMsg}</span>
             )}
+
             <button
               onClick={() => setSidebarOpen((o) => !o)}
               className="text-sm px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition"
             >
               ⚙ Settings
             </button>
+
             <button
               onClick={saveFeaturedImage}
               disabled={savingImage || !hasUnsavedFeaturedPreview}
@@ -744,6 +775,7 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
             >
               {savingImage ? "Saving image..." : "Save AI Image"}
             </button>
+
             <button
               onClick={save}
               disabled={saving || draft.status === "published"}
@@ -751,39 +783,43 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
             >
               {saving ? "Saving…" : "Save"}
             </button>
+
             <button
               onClick={deleteDraft}
               disabled={deleting || publishing}
               className="text-sm px-4 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-40 transition"
             >
-              {deleting ? "Deleting..." : "Delete Draft"}
+              {deleting ? "Deleting..." : "Delete"}
             </button>
-            <button
-              onClick={publish}
-              disabled={
-                deleting ||
-                publishing ||
-                draft.status === "published" ||
-                draft.status === "publishing"
-              }
-              className="text-sm px-4 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 transition"
-            >
-              {draft.status === "publishing"
-                ? "Publishing…"
-                : draft.status === "published" &&
-                    draft.shopify_url && (
-                      <a
-                        href={draft.shopify_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-indigo-600 underline"
-                      >
-                        View on Shopify ↗
-                      </a>
-                    )
-                  ? "✓ Published"
-                  : "Publish →"}
-            </button>
+
+            {/* Publish button OR View on Shopify link */}
+            {draft.status === "published" && draft.shopify_url ? (
+              <a
+                href={draft.shopify_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm px-4 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition whitespace-nowrap"
+              >
+                🛍 View on Shopify ↗
+              </a>
+            ) : (
+              <button
+                onClick={publish}
+                disabled={
+                  deleting ||
+                  publishing ||
+                  draft.status === "published" ||
+                  draft.status === "publishing"
+                }
+                className="text-sm px-4 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 transition"
+              >
+                {draft.status === "publishing"
+                  ? "Publishing…"
+                  : draft.status === "published"
+                    ? "✓ Published"
+                    : "Publish →"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -791,7 +827,6 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
       {/* ── Tiptap editor panel ── */}
       <div className="max-w-3xl mx-auto px-6 pt-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Title */}
           <div className="px-6 pt-6 pb-2">
             <input
               type="text"
@@ -802,10 +837,8 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
             />
           </div>
 
-          {/* Divider */}
           <div className="border-t border-gray-100 mx-6" />
 
-          {/* Rich text editor */}
           <div className="px-2 pb-4">
             <RichEditorClient
               content={draft.content_html ?? ""}
@@ -813,7 +846,6 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
             />
           </div>
 
-          {/* Image tip */}
           <div className="mx-6 mb-4 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl">
             <p className="text-xs text-indigo-600">
               <strong>💡</strong> Type{" "}
@@ -826,7 +858,7 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
         </div>
       </div>
 
-      {/* ── Divider with label ── */}
+      {/* ── Divider ── */}
       <div className="max-w-3xl mx-auto px-6 py-6 flex items-center gap-4">
         <div className="flex-1 border-t border-gray-300" />
         <span className="text-xs text-gray-400 font-medium uppercase tracking-widest bg-gray-100 px-3 py-1 rounded-full">

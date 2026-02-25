@@ -12,7 +12,7 @@ export default function LoginPage() {
       provider: "google",
       options: {
         // This MUST match what you added in Supabase Auth URL Configuration Redirect URLs
-        redirectTo: `${origin}/auth/callback`,
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
       },
     });
 

@@ -22,7 +22,8 @@ export interface Draft {
   blog_id: string | null;
   created_at: string;
   updated_at: string;
-  shopify_url: string | null;
+  shopify_url?: string | null;
+  shopify_article_id?: string | null;
 }
 
 // Matches exactly what @supabase/supabase-js expects for typed clients

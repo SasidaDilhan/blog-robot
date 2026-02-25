@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "../../../lib/supabase/server";
-import { updateDraft } from "../../../lib/supabase/helpers";
 
 interface CallbackBody {
   secret: string;
   draft_id: string;
   user_id: string;
+  status?: string;
   content_html?: string;
   excerpt?: string;
-  tags?: string | string[]; // ← accept both
+  tags?: string | string[];
   seo_title?: string;
   seo_description?: string;
   image_prompt?: string;
   image_url?: string;
   shopify_url?: string;
+  shopify_article_id?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -24,47 +25,67 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // 1. Validate shared secret
+  // Log everything
+  console.log("Full callback body:", JSON.stringify(body));
+
   if (body.secret !== process.env.DRAFT_CALLBACK_SECRET) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // 2. Validate required fields
-  if (!body.draft_id || !body.user_id) {
-    return NextResponse.json(
-      { error: "Missing draft_id or user_id" },
-      { status: 400 },
-    );
+  const admin = createSupabaseAdminClient();
+
+  // ── Zap #2 callback — published ──
+  if (body.status === "published") {
+    const updates: Record<string, unknown> = { status: "published" };
+    if (body.shopify_url) updates.shopify_url = body.shopify_url;
+    if (body.shopify_article_id)
+      updates.shopify_article_id = body.shopify_article_id;
+
+    const { error } = await (admin as any)
+      .from("drafts")
+      .update(updates as never)
+      .eq("id", body.draft_id)
+      .eq("user_id", body.user_id);
+
+    if (error) {
+      console.error("Failed to mark published:", error);
+      return NextResponse.json({ error: "Update failed" }, { status: 500 });
+    }
+
+    console.log("✅ Draft marked published:", body.draft_id, body.shopify_url);
+    return NextResponse.json({ ok: true });
   }
 
-  // 3. Update draft using admin client (bypasses RLS safely server-side)
-  const admin = createSupabaseAdminClient();
-  const { error } = await admin
+  // ── Zap #1 callback — content generated ──
+  const updates: Record<string, unknown> = { status: "draft" };
+
+  if (body.content_html) updates.content_html = body.content_html;
+  if (body.excerpt) updates.excerpt = body.excerpt;
+  if (body.seo_title) updates.seo_title = body.seo_title;
+  if (body.seo_description) updates.seo_description = body.seo_description;
+  if (body.image_prompt) updates.image_prompt = body.image_prompt;
+  if (body.image_url) updates.image_url = body.image_url;
+
+  if (body.tags) {
+    updates.tags = Array.isArray(body.tags)
+      ? body.tags
+      : body.tags
+          .split(",")
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+  }
+
+  const { error } = await (admin as any)
     .from("drafts")
-    .update({
-      status: "draft",
-      content_html: body.content_html ?? null,
-      excerpt: body.excerpt ?? null,
-      tags: body.tags
-        ? Array.isArray(body.tags)
-          ? body.tags
-          : body.tags
-              .split(",")
-              .map((t: string) => t.trim())
-              .filter(Boolean)
-        : null,
-      seo_title: body.seo_title ?? null,
-      seo_description: body.seo_description ?? null,
-      image_prompt: body.image_prompt ?? null,
-      image_url: body.image_url ?? null, // ← add
-    } as unknown as never)
+    .update(updates as never)
     .eq("id", body.draft_id)
-    .eq("user_id", body.user_id); // defense-in-depth even with admin client
+    .eq("user_id", body.user_id);
 
   if (error) {
-    console.error("Draft update failed", error);
+    console.error("Callback update failed:", error);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 
+  console.log("✅ Draft content saved:", body.draft_id);
   return NextResponse.json({ ok: true });
 }
