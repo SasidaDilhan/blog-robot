@@ -9,6 +9,17 @@ export default function NewPostPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  async function waitForDraft(draftId: string) {
+    for (let i = 0; i < 10; i++) {
+      const res = await fetch(`/api/draft-status?id=${draftId}`, {
+        cache: 'no-store',
+      })
+      if (res.ok) return true
+      await new Promise(resolve => setTimeout(resolve, 250))
+    }
+    return false
+  }
+
   async function handleGenerate() {
     if (!title.trim()) return
     setLoading(true)
@@ -28,7 +39,8 @@ export default function NewPostPage() {
     }
 
     const { draft_id } = await res.json()
-    router.push(`/draft/${draft_id}`)
+    await waitForDraft(draft_id)
+    window.location.href = `/draft/${draft_id}`
   }
 
   return (

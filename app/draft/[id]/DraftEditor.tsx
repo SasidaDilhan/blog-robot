@@ -12,6 +12,9 @@ const RichEditorClient = dynamic(() => import("./RichEditorClient"), {
   loading: () => <div className="h-10 bg-gray-100 animate-pulse rounded-lg" />,
 });
 
+const SHOPIFY_ARTICLES_ADMIN_URL =
+  "https://admin.shopify.com/store/buddy-store-8866/content/articles?selectedView=all";
+
 // ─── Image generation hook ────────────────────────────────────────────────────
 
 interface ImgState {
@@ -248,7 +251,7 @@ function BlogPreview({
           )}
 
           {/* Title + meta overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-8">
             <h1
               className="text-white font-bold leading-tight"
@@ -541,24 +544,36 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
   // ── Poll while generating or publishing ──
   // ── Poll while generating or publishing ──
   useEffect(() => {
-    if (draft.status !== "generating" && draft.status !== "publishing") return;
+    if (
+      draft.status !== "generating" &&
+      draft.status !== "publishing" &&
+      !(draft.status === "draft" && !(draft.content_html ?? "").trim())
+    ) {
+      return;
+    }
 
     pollRef.current = setInterval(async () => {
       const res = await fetch(`/api/draft-status?id=${draft.id}`);
       if (res.ok) {
         const updated: Draft = await res.json();
+        const contentArrived =
+          !(draft.content_html ?? "").trim() &&
+          !!(updated.content_html ?? "").trim();
 
-        if (updated.status !== draft.status) {
+        if (updated.status !== draft.status || contentArrived) {
           setDraft((prev) => ({
             ...prev,
-            status: updated.status,
-            ...(updated.shopify_url
-              ? { shopify_url: updated.shopify_url }
-              : {}),
-            ...(updated.image_url ? { image_url: updated.image_url } : {}),
+            ...updated,
           }));
           setTagsInput((updated.tags ?? []).join(", "));
-          if (pollRef.current) clearInterval(pollRef.current);
+          if (
+            pollRef.current &&
+            updated.status !== "generating" &&
+            updated.status !== "publishing" &&
+            !(updated.status === "draft" && !(updated.content_html ?? "").trim())
+          ) {
+            clearInterval(pollRef.current);
+          }
 
           // ── Redirect to Shopify admin when published ──
           if (updated.status === "published") {
@@ -822,6 +837,18 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
             )}
           </div>
         </div>
+        {(draft.status === "publishing" || draft.status === "published") && (
+          <div className="max-w-6xl mx-auto px-6 pb-3">
+            <a
+              href={SHOPIFY_ARTICLES_ADMIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-indigo-600 underline"
+            >
+              Open Shopify blog articles
+            </a>
+          </div>
+        )}
       </div>
 
       {/* ── Tiptap editor panel ── */}
