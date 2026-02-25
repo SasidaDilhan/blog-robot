@@ -7,6 +7,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing prompt" }, { status: 400 });
   }
 
+  const hfKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN;
+  if (!hfKey) {
+    return NextResponse.json(
+      { error: "Missing HUGGINGFACE_API_KEY/HF_TOKEN on server" },
+      { status: 500 },
+    );
+  }
+
   try {
     const photoPrompt = `Photorealistic professional product photography, natural lighting, realistic textures. ${prompt}`;
     const response = await fetch(
@@ -14,7 +22,7 @@ export async function GET(req: NextRequest) {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          Authorization: `Bearer ${hfKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -30,6 +38,7 @@ export async function GET(req: NextRequest) {
           },
           options: {
             use_cache: false,
+            wait_for_model: true,
           },
         }),
         signal: AbortSignal.timeout(120000),
@@ -40,7 +49,11 @@ export async function GET(req: NextRequest) {
       const err = await response.text();
       console.error("HuggingFace error:", response.status, err);
       return NextResponse.json(
-        { error: "Image generation failed" },
+        {
+          error: "Image generation failed",
+          upstreamStatus: response.status,
+          detail: err.slice(0, 500),
+        },
         { status: 502 },
       );
     }
