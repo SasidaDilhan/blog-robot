@@ -14,9 +14,6 @@ const RichEditorClient = dynamic(() => import("./RichEditorClient"), {
   loading: () => <div className="h-10 bg-gray-100 animate-pulse rounded-lg" />,
 });
 
-const SHOPIFY_ARTICLES_ADMIN_URL =
-  "https://admin.shopify.com/store/buddy-store-8866/content/articles?selectedView=all";
-
 // ─── Image generation hook ────────────────────────────────────────────────────
 
 interface ImgState {
@@ -396,18 +393,6 @@ export default function DraftEditor({ initialDraft }: { initialDraft: Draft }) {
             )}
           </div>
         </div>
-        {(draft.status === "publishing" || draft.status === "published") && (
-          <div className="max-w-6xl mx-auto px-6 pb-3">
-            <a
-              href={SHOPIFY_ARTICLES_ADMIN_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-indigo-600 underline"
-            >
-              Open Shopify blog articles
-            </a>
-          </div>
-        )}
       </div>
 
       {/* ── Tiptap editor panel ── */}
